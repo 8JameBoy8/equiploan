@@ -133,4 +133,41 @@
 - [ ] บน Windows ที่ใช้ docker driver คำสั่ง `minikube service --url` ต้องเปิดหน้าต่างค้างไว้ (เป็น tunnel) และพอร์ตจะสุ่มใหม่ทุกครั้ง
 - [ ] ระหว่าง BE ไม่ Ready หน้าเว็บจะได้ 502 จาก nginx (ตามที่คาดไว้)
 - [ ] ตอน pane ของ browser แคบ ตารางล้นแนวนอน ถือเป็นเรื่องหน้าตา ไม่กระทบการทำงาน
-- [ ] README ภาษาไทย (prerequisites, build, deploy, test, cleanup) ยังไม่ได้เขียน
+- [ ] README ภาษาไทย (prerequisites, build, deploy, test, cleanup) ยังไม่ได้เขียน → เขียนแล้วในรอบที่ 5
+
+## รอบที่ 5 — ผลทดสอบที่ทำซ้ำได้ และ README (2026-11-12)
+
+### สิ่งที่สร้าง
+- `README.md` ภาษาไทย มีหัวข้อ:
+  - สถาปัตยกรรมและโครงสร้างโฟลเดอร์
+  - prerequisites พร้อมเวอร์ชันที่ทดสอบแล้ว
+  - build และ load image
+  - deploy ทีละขั้น (Secret สร้างด้วย `Read-Host -AsSecureString`)
+  - วิธีเปิดหน้าเว็บ, test และ cleanup เฉพาะของโปรเจกต์
+  - ตารางปัญหาที่พบบ่อย, การรัน BE ในเครื่อง และตาราง API
+- `docs/test-plan.md` มี 33 กรณีทดสอบในรูปแบบ Input / Expected / Actual ครอบคลุม:
+  - workflow 3 ขั้น และกฎห้ามยืมซ้ำ
+  - ConfigMap/Secret (รวมการแก้ `DB_HOST` ให้ผิดเพื่อพิสูจน์ว่า BE อ่านค่าจาก ConfigMap จริง)
+  - `/healthz` และ `/readyz`
+  - DB ขัดข้อง (อ่าน event ด้วย `kubectl logs` และ `kubectl describe`)
+  - persistence (จด Record ID, ลบ DB Pod โดยคง PVC แล้วอ่าน ID เดิม)
+  - การใช้งานผ่าน browser
+
+### การทดสอบ
+- ลบ namespace เดิม แล้ว deploy ใหม่ตาม README ทีละขั้น ผ่านในรอบเดียว
+  (ต่างจาก README เพียงขั้นสร้าง Secret ที่ AI ใช้รหัสผ่านสุ่มแทน `Read-Host` เพราะพิมพ์ตอบแบบโต้ตอบไม่ได้)
+- รันกรณีทดสอบจริงบน minikube แล้วกรอกคอลัมน์ Actual ได้ผลผ่าน 33/33
+- พบว่าการเรียก `/readyz` ผ่าน Service ระหว่างที่ BE ไม่ Ready จะได้ connection refused (Service ตัด Pod ออก)
+  จึงเปลี่ยนเป็นเรียกที่ `localhost` ใน Pod ของ BE แล้วรัน T19–T24 ใหม่
+- ตรวจค่าลับ:
+  - ไฟล์ที่ track มีเฉพาะ `backend/.env.example` และ `k8s/secret.example.yaml` (ค่าสมมติ `change-me`)
+  - ไม่เคยมี `.env` หรือ `secret.yaml` อยู่ใน history
+  - ไม่พบสตริงหน้าตาแบบ base64 ยาวๆ ในไฟล์ที่ track
+  - ค้นรหัสผ่านจริงจาก Secret ใน cluster ทั้งใน working tree และ `git log -S` แล้วไม่พบ (ตรวจโดยไม่แสดงค่า)
+
+### สิ่งที่มนุษย์ต้องตรวจ
+- [ ] เพื่อนในทีมที่ยังไม่เคยเห็นโปรเจกต์ ลองทำตาม README บนเครื่องตัวเองตั้งแต่ข้อ 1 โดยใช้ `Read-Host` จริงในขั้น Secret
+- [ ] ตรวจว่าคำอธิบายใน README และ test-plan เข้าใจง่าย และทุกคนอธิบายผลของ T14 และ T19–T24 ได้
+- [ ] T31 (กดผ่านหน้าเว็บครบ workflow) อ้างอิงผลจากรอบ 2 และ 4 ในรอบนี้ตรวจผ่าน browser เฉพาะการแสดงผลและปุ่ม
+- [ ] พอร์ตใน `$URL` ของ test-plan (53483) เป็นของรอบที่ทดสอบ ถ้ารันใหม่ต้องเปลี่ยนเป็นพอร์ตที่ได้จริง
+- [ ] `backend/.env` ในเครื่องของคนที่ทดสอบ (ถูก ignore) มีค่าทดสอบสำหรับเครื่องตัวเองเท่านั้น
