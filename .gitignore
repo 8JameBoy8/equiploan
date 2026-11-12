@@ -1,0 +1,26 @@
+# --- Dependencies ---
+node_modules/
+
+# --- Environment files (กันทุกแบบ ยกเว้นไฟล์ตัวอย่าง *.example) ---
+.env
+.env.*
+!.env.example
+!*.example
+
+# --- Logs ---
+*.log
+npm-debug.log*
+logs/
+
+# --- Kubernetes Secret จริง (ห้ามขึ้น repo) ---
+k8s/secret.yaml
+k8s/*secret*.yaml
+# แต่เก็บไฟล์ตัวอย่างไว้ เช่น k8s/secret.example.yaml
+!k8s/*.example.yaml
+
+# --- ไฟล์ที่ระบบปฏิบัติการสร้างเอง ---
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
