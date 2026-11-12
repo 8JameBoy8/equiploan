@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ระบบยืม-คืนอุปกรณ์ชมรม</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>ระบบยืม-คืนอุปกรณ์ชมรม</h1>
+
+  <!-- แถบแสดงข้อความ (สำเร็จ / error จาก BE) -->
+  <div id="message" class="message" hidden></div>
+
+  <!-- ส่วนที่ 1: รายการอุปกรณ์ -->
+  <section>
+    <h2>อุปกรณ์</h2>
+    <table>
+      <thead>
+        <tr><th>#</th><th>ชื่อ</th><th>หมวด</th><th>สถานะ</th></tr>
+      </thead>
+      <tbody id="equipment-body"></tbody>
+    </table>
+  </section>
+
+  <!-- ส่วนที่ 2: ฟอร์มขอยืม -->
+  <section>
+    <h2>ขอยืมอุปกรณ์</h2>
+    <form id="loan-form">
+      <label>อุปกรณ์ (เฉพาะที่ว่าง)
+        <select id="equipment-select" required></select>
+      </label>
+      <label>ชื่อผู้ยืม *
+        <input id="borrower-name" maxlength="100" required>
+      </label>
+      <label>ช่องทางติดต่อ
+        <input id="borrower-contact" maxlength="100">
+      </label>
+      <label>วัตถุประสงค์
+        <input id="purpose">
+      </label>
+      <button type="submit">ส่งคำขอ</button>
+    </form>
+  </section>
+
+  <!-- ส่วนที่ 3: รายการคำขอ -->
+  <section>
+    <h2>คำขอยืม</h2>
+    <label>กรองสถานะ
+      <select id="status-filter">
+        <option value="">ทั้งหมด</option>
+        <option value="requested">requested (รออนุมัติ)</option>
+        <option value="approved">approved (กำลังยืม)</option>
+        <option value="rejected">rejected (ถูกปฏิเสธ)</option>
+        <option value="returned">returned (คืนแล้ว)</option>
+      </select>
+    </label>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>อุปกรณ์</th><th>ผู้ยืม</th><th>วัตถุประสงค์</th>
+          <th>สถานะ</th><th>เวลาขอ</th><th>จัดการ</th>
+        </tr>
+      </thead>
+      <tbody id="loans-body"></tbody>
+    </table>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

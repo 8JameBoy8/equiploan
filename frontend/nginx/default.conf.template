@@ -1,0 +1,38 @@
+# config ของ nginx สำหรับ Frontend
+# ไฟล์นี้เป็น template: ตอน container เริ่ม image nginx จะแทนค่า ${BACKEND_HOST}
+# และ ${BACKEND_PORT} จาก environment variables แล้วเขียนเป็น /etc/nginx/conf.d/default.conf
+# (แทนเฉพาะตัวแปรที่มีอยู่ใน env  ตัวแปรของ nginx เช่น $uri จึงไม่ถูกแตะ)
+#
+# เปลี่ยนชื่อ Service / พอร์ตของ BE ได้โดยไม่ต้อง build ใหม่ เช่น
+#   docker run -e BACKEND_HOST=my-backend -e BACKEND_PORT=8080 ...
+#   หรือใน k8s ใส่ env ใน Deployment (จาก ConfigMap)
+
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # ส่งต่อทุกคำขอ /api/... ไปยัง Service ของ BE (path เดิมไม่ถูกตัด)
+    location /api/ {
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 30s;
+    }
+
+    # ให้ probe ของ k8s ใช้ตรวจว่า nginx ยังทำงาน (ไม่ขึ้นกับ BE)
+    location = /nginx-health {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # ไฟล์ static (index.html, app.js, style.css)
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}

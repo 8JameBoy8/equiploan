@@ -1,0 +1,18 @@
+/* หน้าตาเรียบง่าย อ่านง่าย */
+body { font-family: sans-serif; max-width: 960px; margin: 0 auto; padding: 16px; }
+section { margin-bottom: 32px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+th { background: #f0f0f0; }
+form label { display: block; margin-bottom: 8px; }
+form input, form select { display: block; width: 100%; max-width: 360px; padding: 4px; }
+button { margin-right: 4px; cursor: pointer; }
+
+.message { padding: 8px 12px; margin-bottom: 16px; border: 1px solid; }
+.message.ok { background: #e8f5e9; border-color: #4caf50; }
+.message.error { background: #ffebee; border-color: #f44336; }
+
+.status-available, .status-approved { color: #2e7d32; font-weight: bold; }
+.status-borrowed, .status-rejected { color: #c62828; font-weight: bold; }
+.status-requested { color: #ef6c00; font-weight: bold; }
+.status-returned { color: #555; }

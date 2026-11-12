@@ -33,3 +33,34 @@
 - [ ] รอบ k8s ต้องให้ livenessProbe ใช้ `/healthz` และ readinessProbe ใช้ `/readyz` เท่านั้น
 - [ ] ยังไม่มี Dockerfile ของ BE (ทำในรอบ build/k8s)
 - [ ] `backend/.env` ในเครื่องผู้ทดสอบมีรหัสผ่านทดสอบ ไฟล์นี้ถูกกันไว้ใน .gitignore แล้ว ห้าม commit
+
+## รอบที่ 2 — Frontend (HTML + JavaScript + nginx) (2026-11-12)
+
+### สิ่งที่สร้าง
+- `frontend/index.html` หน้าเดียว แบ่ง 3 ส่วน: ตารางอุปกรณ์พร้อมสถานะว่าง/ถูกยืม, ฟอร์มขอยืม (dropdown แสดงเฉพาะอุปกรณ์ที่ว่าง),
+  ตารางคำขอพร้อมตัวกรองสถานะและปุ่ม อนุมัติ/ปฏิเสธ/คืน ตามสถานะ
+- `frontend/app.js` JavaScript ธรรมดา เรียก BE ผ่าน `fetch('/api/...')` แบบ relative path เท่านั้น
+  แสดงข้อมูลด้วย `textContent` (กัน XSS) และแสดงข้อความ error จาก BE (เช่น 409) ที่แถบด้านบน
+- `frontend/style.css` สไตล์เรียบง่าย
+- `frontend/nginx/default.conf.template` เสิร์ฟไฟล์ static, ส่งต่อ `/api/` ไปยัง `http://${BACKEND_HOST}:${BACKEND_PORT}`
+  และมี `/nginx-health` ไว้ให้ probe
+- `frontend/Dockerfile` ใช้ `nginx:1.27.3-alpine` ตั้งค่าเริ่มต้น `BACKEND_HOST=backend` และ `BACKEND_PORT=3000`
+  (เปลี่ยนได้ด้วย env ตอนรัน ไม่ต้อง build ใหม่)
+
+### การทดสอบ
+- build `equiploan-frontend:0.1.0` แล้วรันโดยตั้ง `BACKEND_HOST=host.docker.internal` เพื่อชี้ไปที่ BE บนเครื่อง
+  config ที่ nginx สร้างแทนค่าถูกต้อง และ `$uri` ไม่ถูกแตะ
+- curl: `/` ได้ 200, `/app.js` ได้ 200, `/nginx-health` ได้ 200, `/api/equipment` ผ่าน nginx ได้ 200, path ที่ไม่มีได้ 404
+- ใน browser: ขอยืม -> อนุมัติ (อุปกรณ์เปลี่ยนเป็น "ถูกยืม" และหายจาก dropdown) -> คืน, ปฏิเสธพร้อมเหตุผล,
+  อนุมัติซ้ำแล้วเห็นข้อความ 409 จาก BE, ตัวกรองสถานะใช้ได้, ข้อมูลที่มี `<img onerror>` แสดงเป็นตัวอักษรธรรมดา
+- หยุด BE แล้วหน้าเว็บแสดง "โหลดข้อมูลไม่สำเร็จ (HTTP 502)" แต่ nginx ยังเสิร์ฟหน้าเว็บได้
+- พบบั๊กใน app.js: ข้อความ error ค้างอยู่แม้โหลดครั้งถัดไปสำเร็จ แก้แล้วและทดสอบซ้ำผ่าน
+
+### สิ่งที่มนุษย์ต้องตรวจ
+- [ ] ทุกคนอธิบายได้ว่า FE ไม่รู้ที่อยู่ของ BE เลย: browser เรียก `/api` -> nginx -> Service ของ BE
+- [ ] ทดสอบปุ่มปฏิเสธใน browser ด้วยมือ (ตอนทดสอบอัตโนมัติ AI แทน `prompt()` ด้วยค่าคงที่ เพราะ dialog บล็อกการทำงานอัตโนมัติ)
+- [ ] nginx resolve `BACKEND_HOST` ตอนสตาร์ท ถ้าไม่มี Service ชื่อนั้น container จะสตาร์ทไม่ขึ้น
+  รอบ k8s ต้องสร้าง Service ของ BE ก่อน หรือยอมให้ pod ของ FE restart สักรอบ
+- [ ] ตอนทดสอบในเครื่อง `host.docker.internal` มีทั้ง IPv4 และ IPv6 (ต่อไม่ได้) หลัง BE ล่มแล้วกลับมา
+  จึงอาจได้ 502 ประมาณ 10 วินาที (ค่า `fail_timeout` ของ nginx) ใน k8s ที่ Service มี ClusterIP เดียวจะไม่เกิดปัญหานี้
+- [ ] ยังไม่มีการกำหนด resource requests/limits และ probe ของ FE (ทำในรอบ k8s)
