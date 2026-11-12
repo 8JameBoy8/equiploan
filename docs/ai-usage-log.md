@@ -93,3 +93,44 @@
 - [ ] BE ใน image ใช้ Node 22 แต่ตอนพัฒนาในเครื่องใช้ Node 24 (โค้ดใช้ได้ทั้งคู่ เพราะ engines กำหนด >=20.6)
 - [ ] เวลาแก้โค้ดต้องเพิ่ม tag ทุกครั้ง (เช่น 0.1.1) แล้ว build และ `minikube image load` ใหม่ ห้ามใช้ latest
 - [ ] รอบ k8s ต้องตั้ง `imagePullPolicy: IfNotPresent` (หรือ `Never`) เพื่อให้ใช้ image ที่โหลดเข้า minikube แล้ว
+
+## รอบที่ 4 — Kubernetes manifests และ deploy ลง minikube (2026-11-12)
+
+### สิ่งที่สร้าง (โฟลเดอร์ `k8s/`)
+- `00-namespace.yaml` Namespace `equiploan`
+- `10-configmap.yaml` ConfigMap `equiploan-config` มี `DB_HOST/DB_PORT/DB_NAME` และ `BACKEND_HOST/BACKEND_PORT`
+- `secret.example.yaml` Secret ตัวอย่างที่ใช้ค่าสมมติ พร้อมคำสั่งสร้าง Secret จริงด้วย `Read-Host -AsSecureString`
+- `20-db.yaml` มี:
+  - PVC 1Gi
+  - Deployment `postgres:16.4` (strategy Recreate, PGDATA เป็น subfolder, probe ด้วย `pg_isready`)
+  - Service ClusterIP
+  - init.sql mount จาก ConfigMap `equiploan-db-init` ที่สร้างด้วย `kubectl create configmap --from-file`
+- `30-backend.yaml` มี:
+  - Deployment ที่รับค่าผ่าน `configMapKeyRef` / `secretKeyRef`
+  - liveness `/healthz`, readiness `/readyz`
+  - `runAsNonRoot` และ `runAsUser: 1000`
+  - Service ClusterIP
+- `40-frontend.yaml` Deployment (probe `/nginx-health`) และ Service NodePort 30080
+- resources: FE 50m/64Mi → 200m/128Mi, BE 100m/128Mi → 500m/256Mi, DB 100m/256Mi → 500m/512Mi
+
+### ปัญหาที่เจอและแก้
+- BE ติด `CreateContainerConfigError` เพราะ `runAsNonRoot` ตรวจ user ชื่อ `node` ไม่ได้ (ต้องเป็นตัวเลข)
+  แก้โดยเพิ่ม `runAsUser: 1000` และ `runAsGroup: 1000` ใน manifest ไม่ต้อง build image ใหม่
+
+### การทดสอบบน minikube (v1.39.0)
+- Secret จริงสร้างด้วยรหัสผ่านสุ่ม (ไม่แสดงบนจอ ไม่เขียนลงไฟล์ ไม่อยู่ใน repo)
+- Pod ทั้ง 3 เป็น `Running 1/1`, DB Service เป็น ClusterIP (ไม่มี NodePort), PVC อยู่ในสถานะ `Bound` 1Gi
+- BE ใน Pod รันเป็น `uid=1000(node)` และ resources ตรงตามที่กำหนด
+- เปิดผ่าน `minikube service equiploan-frontend -n equiploan --url` ใน browser แล้ว ขอยืม → อนุมัติ → คืน ได้ครบ
+- `kubectl scale deploy/equiploan-db --replicas=0` แล้ว BE `ready=false` แต่ `restarts=0`  พอ scale กลับ BE ก็ Ready เอง
+- ลบ Pod ของ DB แล้วข้อมูลคำขอยังอยู่ (เก็บบน PVC)
+
+### สิ่งที่มนุษย์ต้องตรวจ
+- [ ] ห้ามใช้ `kubectl apply -f k8s/` ทั้งโฟลเดอร์ เพราะจะ apply `secret.example.yaml` ทับ Secret จริง ให้ apply ทีละไฟล์ตามลำดับ
+- [ ] ถ้าเปลี่ยนรหัสผ่านใน Secret หลังจาก DB สร้างแล้ว postgres จะไม่เปลี่ยนตาม (ใช้ค่าแค่ตอน init ครั้งแรก)
+  ต้อง `ALTER USER` ใน DB หรือลบ PVC แล้ว deploy ใหม่ (ข้อมูลหาย)
+- [ ] ถ้าแก้ `db/init.sql` ต้องสร้าง ConfigMap `equiploan-db-init` ใหม่ และจะมีผลเฉพาะตอน PVC ยังว่าง
+- [ ] บน Windows ที่ใช้ docker driver คำสั่ง `minikube service --url` ต้องเปิดหน้าต่างค้างไว้ (เป็น tunnel) และพอร์ตจะสุ่มใหม่ทุกครั้ง
+- [ ] ระหว่าง BE ไม่ Ready หน้าเว็บจะได้ 502 จาก nginx (ตามที่คาดไว้)
+- [ ] ตอน pane ของ browser แคบ ตารางล้นแนวนอน ถือเป็นเรื่องหน้าตา ไม่กระทบการทำงาน
+- [ ] README ภาษาไทย (prerequisites, build, deploy, test, cleanup) ยังไม่ได้เขียน

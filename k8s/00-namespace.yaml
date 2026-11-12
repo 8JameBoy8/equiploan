@@ -1,0 +1,5 @@
+# Namespace ของโปรเจกต์ ทุก resource อยู่ในนี้ ลบทีเดียวได้ทั้งหมด
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: equiploan

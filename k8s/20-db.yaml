@@ -1,0 +1,109 @@
+# ---------- DB: PostgreSQL ----------
+# ต้องมีก่อน apply:
+#   - Secret    equiploan-db-secret  (DB_USER, DB_PASSWORD)
+#   - ConfigMap equiploan-db-init    (สร้างจาก db/init.sql)
+
+# พื้นที่เก็บข้อมูลถาวร 1Gi  ข้อมูลอยู่รอดแม้ Pod ถูกลบ
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: equiploan-db-data
+  namespace: equiploan
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: equiploan-db
+  namespace: equiploan
+  labels:
+    app: equiploan-db
+spec:
+  replicas: 1
+  # Recreate: ปิด Pod เก่าก่อนสร้างใหม่  เพราะ PVC แบบ ReadWriteOnce ใช้ได้ทีละ Pod
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: equiploan-db
+  template:
+    metadata:
+      labels:
+        app: equiploan-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16.4
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: equiploan-config
+                  key: DB_NAME
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: equiploan-db-secret
+                  key: DB_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: equiploan-db-secret
+                  key: DB_PASSWORD
+            # เก็บข้อมูลใน subfolder  เลี่ยงปัญหาโฟลเดอร์ lost+found ที่ราก volume
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            # init.sql รันครั้งแรกตอน PVC ยังว่างเท่านั้น
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: equiploan-db-data
+        - name: init
+          configMap:
+            name: equiploan-db-init
+---
+# Service ภายใน cluster เท่านั้น (ClusterIP)  ไม่เปิดออกนอก cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: equiploan-db
+  namespace: equiploan
+spec:
+  type: ClusterIP
+  selector:
+    app: equiploan-db
+  ports:
+    - port: 5432
+      targetPort: 5432

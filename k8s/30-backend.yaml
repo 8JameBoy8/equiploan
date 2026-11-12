@@ -1,0 +1,99 @@
+# ---------- BE: Node.js + Express ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: equiploan-backend
+  namespace: equiploan
+  labels:
+    app: equiploan-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: equiploan-backend
+  template:
+    metadata:
+      labels:
+        app: equiploan-backend
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        # ระบุ uid เป็นตัวเลข (user node ใน image = 1000)
+        # ถ้าไม่ระบุ kubelet จะตรวจไม่ได้ว่าไม่ใช่ root เพราะ Dockerfile ใช้ชื่อ "node"
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: backend
+          image: equiploan-backend:0.1.0
+          # ใช้ image ที่โหลดเข้า minikube แล้ว (minikube image load)
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          env:
+            # ค่าทั่วไปจาก ConfigMap
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: equiploan-config
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: equiploan-config
+                  key: DB_PORT
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: equiploan-config
+                  key: DB_NAME
+            # ค่าลับจาก Secret
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: equiploan-db-secret
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: equiploan-db-secret
+                  key: DB_PASSWORD
+          # liveness: แอปยังทำงานไหม (ไม่แตะ DB)  -> DB ล่มแล้ว BE จะไม่ถูก restart วน
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          # readiness: ต่อ DB ได้ไหม  -> DB ล่มแล้ว k8s หยุดส่ง traffic มาชั่วคราว
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 3000
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 3    # /readyz รอ DB นานสุด 2 วินาที
+            failureThreshold: 2
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+---
+# Service ภายใน cluster (ClusterIP)  FE เรียกผ่านชื่อ equiploan-backend
+apiVersion: v1
+kind: Service
+metadata:
+  name: equiploan-backend
+  namespace: equiploan
+spec:
+  type: ClusterIP
+  selector:
+    app: equiploan-backend
+  ports:
+    - port: 3000
+      targetPort: 3000

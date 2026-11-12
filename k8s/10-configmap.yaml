@@ -1,0 +1,15 @@
+# ค่าทั่วไป (ไม่ลับ) ที่ BE และ FE ใช้
+# ค่าลับ (DB_USER / DB_PASSWORD) อยู่ใน Secret equiploan-db-secret
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: equiploan-config
+  namespace: equiploan
+data:
+  # BE ใช้ต่อ DB  (DB_HOST = ชื่อ Service ของ DB)
+  DB_HOST: equiploan-db
+  DB_PORT: "5432"
+  DB_NAME: equiploan
+  # FE (nginx) ใช้ส่งต่อ /api  (BACKEND_HOST = ชื่อ Service ของ BE)
+  BACKEND_HOST: equiploan-backend
+  BACKEND_PORT: "3000"

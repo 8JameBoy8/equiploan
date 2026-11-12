@@ -1,0 +1,70 @@
+# ---------- FE: nginx + HTML/JS ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: equiploan-frontend
+  namespace: equiploan
+  labels:
+    app: equiploan-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: equiploan-frontend
+  template:
+    metadata:
+      labels:
+        app: equiploan-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: equiploan-frontend:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          env:
+            # nginx ส่งต่อ /api ไปยัง Service ของ BE ตามค่านี้
+            - name: BACKEND_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: equiploan-config
+                  key: BACKEND_HOST
+            - name: BACKEND_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: equiploan-config
+                  key: BACKEND_PORT
+          livenessProbe:
+            httpGet:
+              path: /nginx-health
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /nginx-health
+              port: 80
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+# เปิดให้ browser เข้าได้ผ่าน NodePort
+# บน minikube เปิดด้วย: minikube service equiploan-frontend -n equiploan --url
+apiVersion: v1
+kind: Service
+metadata:
+  name: equiploan-frontend
+  namespace: equiploan
+spec:
+  type: NodePort
+  selector:
+    app: equiploan-frontend
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30080
