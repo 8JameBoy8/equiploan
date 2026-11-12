@@ -1,0 +1,9 @@
+# ไฟล์ที่ไม่ต้องส่งเข้าไปตอน docker build
+# (Dockerfile ของ FE COPY เฉพาะไฟล์ที่ระบุอยู่แล้ว แต่กันไว้ให้ build context เล็กและไม่มีไฟล์ลับหลุด)
+.env
+.env.*
+*.log
+Dockerfile
+.dockerignore
+.git
+*.md

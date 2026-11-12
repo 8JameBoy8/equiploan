@@ -1,0 +1,15 @@
+# ไฟล์ที่ไม่ต้องส่งเข้าไปตอน docker build
+# dependency จะติดตั้งใหม่ใน image ด้วย npm ci
+node_modules
+npm-debug.log*
+*.log
+
+# ไฟล์ค่า env ทุกแบบ (ห้ามมีรหัสผ่านใน image)
+.env
+.env.*
+
+# ไฟล์ที่ไม่เกี่ยวกับการรันแอป
+Dockerfile
+.dockerignore
+.git
+*.md

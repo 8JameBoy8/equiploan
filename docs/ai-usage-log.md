@@ -64,3 +64,32 @@
 - [ ] ตอนทดสอบในเครื่อง `host.docker.internal` มีทั้ง IPv4 และ IPv6 (ต่อไม่ได้) หลัง BE ล่มแล้วกลับมา
   จึงอาจได้ 502 ประมาณ 10 วินาที (ค่า `fail_timeout` ของ nginx) ใน k8s ที่ Service มี ClusterIP เดียวจะไม่เกิดปัญหานี้
 - [ ] ยังไม่มีการกำหนด resource requests/limits และ probe ของ FE (ทำในรอบ k8s)
+
+## รอบที่ 3 — Dockerfile และโหลด image เข้า minikube (2026-11-12)
+
+### สิ่งที่สร้าง
+- `backend/Dockerfile` ใช้ `node:22.12.0-alpine`, ติดตั้งด้วย `npm ci --omit=dev`, รันด้วย `USER node` (uid 1000)
+  และสั่ง `CMD ["node", "src/server.js"]` (ไม่ผ่าน npm เพื่อให้ SIGTERM ถึงแอป)
+  ใน image มีแค่ `NODE_ENV` และ `PORT` ค่า `DB_*` ต้องส่งตอนรัน
+- `backend/.dockerignore` กัน `node_modules`, `.env` และ `.env.*`, `*.log`, `.git`
+- `frontend/.dockerignore` ส่วน `frontend/Dockerfile` ใช้ของเดิมจากรอบ 2
+- DB ไม่มี Dockerfile ใช้ `postgres:16.4` สำเร็จรูป
+
+### การทดสอบ
+- `equiploan-backend:0.1.0`:
+  - `id` ได้ `uid=1000(node)`
+  - env ไม่มี `DB_*`
+  - ไม่มีไฟล์ `.env` ใน image
+  - user node เขียน `/app/src` ไม่ได้
+  - ใน `docker image history` ไม่มีคำว่า password
+- รัน DB + BE + FE ใน docker network `equiploan-net` (DB ไม่เปิดพอร์ตออกนอก network):
+  ขอยืมและอนุมัติผ่าน nginx ได้, หยุด DB แล้ว `/readyz` ได้ 503 ส่วน `/healthz` ได้ 200 และ BE ไม่ restart
+- `docker stop` BE ปิดตัวใน 0.2 วินาที ด้วย exit code 0 (รับ SIGTERM ได้)
+- `minikube image load` ทั้ง `equiploan-backend:0.1.0`, `equiploan-frontend:0.1.0` และ `postgres:16.4`
+  แล้วยืนยันด้วย `minikube image ls` (minikube v1.39.0)
+
+### สิ่งที่มนุษย์ต้องตรวจ
+- [ ] FE (nginx) ยังรันเป็น root ตามค่าเริ่มต้นของ image  ถ้าต้องการ non-root ให้เปลี่ยนเป็น `nginxinc/nginx-unprivileged`
+- [ ] BE ใน image ใช้ Node 22 แต่ตอนพัฒนาในเครื่องใช้ Node 24 (โค้ดใช้ได้ทั้งคู่ เพราะ engines กำหนด >=20.6)
+- [ ] เวลาแก้โค้ดต้องเพิ่ม tag ทุกครั้ง (เช่น 0.1.1) แล้ว build และ `minikube image load` ใหม่ ห้ามใช้ latest
+- [ ] รอบ k8s ต้องตั้ง `imagePullPolicy: IfNotPresent` (หรือ `Never`) เพื่อให้ใช้ image ที่โหลดเข้า minikube แล้ว
